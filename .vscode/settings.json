@@ -1,0 +1,12 @@
+{
+    "idf.espIdfPathWin": "C:\\esp\\esp-idf-v5.4.2",
+    "idf.toolsPathWin": "c:\\Users\\CAKIRCA\\.espressif\\tools",
+    "idf.pythonInstallPath": "c:\\Users\\CAKIRCA\\.espressif\\tools\\tools\\idf-python\\3.11.2\\python.exe",
+    "files.associations": {
+        "waveshare_rgb_lcd_port.h": "c",
+        "cstdlib": "c",
+        "ui.h": "c"
+    },
+    "idf.flashType": "UART",
+    "idf.portWin": "COM15"
+}
