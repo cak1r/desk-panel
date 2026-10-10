@@ -1,2 +1,7 @@
 /build
 /sdkconfig.old
+/managed_components
+/main/wifi_credentials.h
+/main/mqtt_config.h
+/main/secrets_config.h
+/assets/node_modules

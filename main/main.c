@@ -5,24 +5,24 @@
  */
 
 #include "waveshare_rgb_lcd_port.h"
+#include "usb_hid.h"
+#include "wifi_time.h"
+#include "app_mqtt.h"
 #include "ui.h"
 
 void app_main()
 {
-    waveshare_esp32_s3_rgb_lcd_init(); // Initialize the Waveshare ESP32-S3 RGB LCD 
-    // wavesahre_rgb_lcd_bl_on();  //Turn on the screen backlight 
-    // wavesahre_rgb_lcd_bl_off(); //Turn off the screen backlight 
-    
-    ESP_LOGI(TAG, "Display LVGL demos");
+    waveshare_esp32_s3_rgb_lcd_init(); // Initialize the Waveshare ESP32-S3 RGB LCD
+    wavesahre_rgb_lcd_bl_on();         // Turn on the screen backlight
+
+    usb_hid_init();  // Bring up the USB HID (keyboard + consumer control) transport
+    wifi_time_init(); // Connect to WiFi and sync the clock over SNTP in the background
+    app_mqtt_init();  // Connect to the MQTT broker (no-op until main/mqtt_config.h is filled in)
+
+    ESP_LOGI(TAG, "Starting UI");
     // Lock the mutex due to the LVGL APIs are not thread-safe
     if (lvgl_port_lock(-1)) {
-        // lv_demo_stress();
-        //lv_demo_benchmark();
-        // lv_demo_music();
-        //lv_demo_widgets();
-        //example_lvgl_demo_ui();
-        // Release the mutex
-        //ui_init();
+        ui_init();
 
         lvgl_port_unlock();
     }
