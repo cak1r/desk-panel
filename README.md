@@ -1,79 +1,113 @@
-| Supported Targets | ESP32-S3 |
-| ----------------- | -------- |
+# Desk Panel
 
-| Supported LCD Controller    | ST7701 |
-| ----------------------------| -------|
+ESP32-S3 tabanlı, 7" dokunmatik bir masaüstü bilgi ve kontrol paneli. Boştayken
+büyük bir saat gösterir; dokununca Stream Deck benzeri bir tuş ızgarasına ve
+canlı bilgi ekranlarına geçer. PC'ye tek bir USB-C kablosuyla bağlanır: aynı
+kablo hem güç verir hem de panelin klavye/medya tuşu olarak davranmasını sağlar.
 
-| Supported Touch Controller  |  GT911 |
-| ----------------------------| -------|
+## Özellikler
 
-# RGB Avoid Tearing Example
+- **Bekleme ekranı:** büyük saat ve tarih; belirli bir süre dokunulmazsa
+  otomatik olarak geri döner.
+- **Tuş ızgarası:** ekranlara geçiş, klavye makroları, medya tuşları.
+- **Namaz vakitleri:** günün 6 vakti ve sıradaki vakte geri sayım (Aladhan API,
+  Diyanet hesaplama yöntemi, NVS'te önbelleklenir).
+- **Hava durumu:** Open-Meteo'dan anlık hava.
+- **Medya:** ses seviyesi, oynat/duraklat/ileri/geri.
+- **PC sağlığı:** CPU / RAM / GPU kullanımı.
+- **Claude kullanımı:** günlük istek ve token sayısı.
+- **Şifre/makro ekranı:** PIN ile kilitli, metni USB klavye olarak yazar.
 
-[esp_lcd](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/lcd.html) provides several panel drivers out-of box, e.g. ST7789, SSD1306, NT35510. However, there're a lot of other panels on the market, it's beyond `esp_lcd` component's responsibility to include them all.
+Yapım aşamasında (companion tarafı hazır, panel ekranları geliştiriliyor):
+şimdi çalan şarkı + kapak, uygulama başına ses mikseri, öndeki uygulamaya göre
+otomatik sayfa (YouTube / YouTube Music / WhatsApp), WhatsApp bildirimleri ve
+sabit sohbetler, 10 günlük hava durumu, günün hadisi.
 
-`esp_lcd` allows user to add their own panel drivers in the project scope (i.e. panel driver can live outside of esp-idf), so that the upper layer code like LVGL porting code can be reused without any modifications, as long as user-implemented panel driver follows the interface defined in the `esp_lcd` component.
+## Donanım
 
-This example demonstrates how to avoid tearing when using LVGL with RGB interface screens in an esp-idf project. The example will use the LVGL library to draw a stylish music player.
+- [Waveshare ESP32-S3-Touch-LCD-7](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-7):
+  800×480 RGB panel, GT911 dokunmatik, CH422G IO genişletici, 8 MB PSRAM
+- USB-C ile PC'ye bağlantı (ESP32-S3'ün yerel USB OTG portu)
 
-This example uses the [esp_timer](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/esp_timer.html) to generate the ticks needed by LVGL and uses a dedicated task to run the `lv_timer_handler()`. Since the LVGL APIs are not thread-safe, this example uses a mutex which be invoked before the call of `lv_timer_handler()` and released after it. The same mutex needs to be used in other tasks and threads around every LVGL (lv_...) related function call and code. For more porting guides, please refer to [LVGL porting doc](https://docs.lvgl.io/master/porting/index.html).
-
-## How to use the example
-
-## ESP-IDF Required
-
-### Hardware Required
-
-* An ESP32-S3R8 development board
-* A ST7701 LCD panel, with RGB interface
-* An USB cable for power supply and programming
-
-### Hardware Connection
-
-The connection between ESP Board and the LCD is as follows:
+## Mimari
 
 ```
-       ESP Board                           RGB  Panel
-+-----------------------+              +-------------------+
-|                   GND +--------------+GND                |
-|                       |              |                   |
-|                   3V3 +--------------+VCC                |
-|                       |              |                   |
-|                   PCLK+--------------+PCLK               |
-|                       |              |                   |
-|             DATA[15:0]+--------------+DATA[15:0]         |
-|                       |              |                   |
-|                  HSYNC+--------------+HSYNC              |
-|                       |              |                   |
-|                  VSYNC+--------------+VSYNC              |
-|                       |              |                   |
-|                     DE+--------------+DE                 |
-|                       |              |                   |
-|               BK_LIGHT+--------------+BLK                |
-+-----------------------+              |                   |
-                               3V3-----+DISP_EN            |
-                                       |                   |
-                                       +-------------------+
+┌──────────────────────────┐  USB HID (klavye + medya tuşları)  ┌───────────────┐
+│  Panel (ESP32-S3)        │ ─────────────────────────────────► │      PC       │
+│  LVGL 8 arayüz           │                                     │               │
+│  TinyUSB HID             │        MQTT (WiFi)                  │   companion/  │
+│  WiFi + SNTP + MQTT      │ ◄─────── durum ─────────────────── │   (Python,    │
+│  Aladhan, Open-Meteo     │ ──────── komutlar ───────────────► │    Windows)   │
+└──────────────────────────┘                                     └───────────────┘
 ```
 
-* The LCD parameters and GPIO number used by this example can be changed in [example_rgb_avoid_tearing.c](main/example_rgb_avoid_tearing.c). Especially, please pay attention to the **vendor specific initialization**, it can be different between manufacturers and should consult the LCD supplier for initialization sequence code.
-* The LVGL parameters can be changed not only through `menuconfig` but also directly in `lvgl_conf.h`
+- **Komutlar** (kısayollar, makrolar, medya tuşları) USB HID ile gider; PC'de
+  yazılım gerekmez.
+- **PC'den okunan durum** (çalan şarkı, uygulama sesleri, bildirimler, kullanım)
+  ve belirli bir uygulamayı hedefleyen komutlar MQTT ve
+  [companion servisi](companion/README.md) üzerinden geçer.
+- Namaz vakitleri ve hava durumunu panel doğrudan internetten çeker.
 
-### Configure the Project
+MQTT konularının ve mesaj biçimlerinin tam listesi
+[companion/README.md](companion/README.md#mqtt-arayüzü) içinde.
 
-Run `idf.py menuconfig` and navigate to `Example Configuration` menu.
+## Firmware'i derleme
 
-### Build and Flash
+Gereken: [ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/get-started/) v5.4+.
 
-Run `idf.py set-target esp32s3` to select the target chip.
+1. Git'e girmeyen ayar dosyalarını örneklerinden oluşturup doldurun:
 
-Run `idf.py -p PORT build flash monitor` to build, flash and monitor the project. A fancy animation will show up on the LCD as expected.
+   ```bash
+   cp main/wifi_credentials.h.example main/wifi_credentials.h   # WiFi adı/şifresi
+   cp main/mqtt_config.h.example      main/mqtt_config.h        # broker adresi (boş = MQTT kapalı)
+   cp main/secrets_config.h.example   main/secrets_config.h     # kilit PIN'i ve makrolar
+   ```
 
-The first time you run `idf.py` for the example will cost extra time as the build system needs to address the component dependencies and downloads the missing components from registry into `managed_components` folder.
+2. Konum ayarları kodda: namaz için `main/prayer_times.c` (`PRAYER_CITY`,
+   `PRAYER_COUNTRY`), hava için `main/weather_state.c` (`WEATHER_LAT`, `WEATHER_LON`).
 
-(To exit the serial monitor, type ``Ctrl-]``.)
+3. Derleyip yükleyin:
 
-See the [Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/latest/get-started/index.html) for full steps to configure and use ESP-IDF to build projects.
+   ```bash
+   idf.py set-target esp32s3
+   idf.py -p <PORT> build flash monitor
+   ```
 
-## Troubleshooting
+   İlk derlemede bileşenler (LVGL vb.) `managed_components/` altına indirilir.
 
-For any technical queries, please open an [issue](https://github.com/espressif/esp-iot-solution/issues) on GitHub. We will get back to you soon.
+Bölümleme tablosu (`partitions.csv`) 8 MB flash için iki OTA bölümü içerir;
+diğer seçenekler `partitions_notes.txt` dosyasında.
+
+> ⚠️ `secrets_config.h` şu an düz metin. Gerçek şifre saklamadan önce flash ve
+> NVS şifrelemesi açılmalı (yol haritası 4. adım).
+
+## PC companion servisi
+
+Windows'ta tepside çalışan Python servisi. Kurulum, ayarlar, MQTT arayüzü,
+testler ve bilinen kısıtlar için: **[companion/README.md](companion/README.md)**.
+
+## Repo yapısı
+
+```
+main/                  firmware kaynakları
+  main.c               başlatma sırası
+  ui.c, ui_theme.c     tileview, ekran geçişleri, tema
+  screen_*.c           her ekran
+  *_state.c            MQTT/HTTP'den gelen veri modelleri
+  app_mqtt.c           MQTT istemcisi ve abonelik yönlendirme
+  usb_hid.c            TinyUSB klavye + consumer control
+  prayer_times.c       Aladhan istemcisi + NVS önbellek
+  fonts/, images/      LVGL'e dönüştürülmüş fontlar ve görseller
+components/            yerel olarak tutulan bileşenler (LVGL, GT911)
+assets/                kaynak fontlar, ikonlar, gradyan üretici
+companion/             PC tarafı servis (Python) — kendi README'si var
+```
+
+## Yol haritası
+
+1. ~~LVGL + tileview iskeleti ve USB HID~~
+2. ~~Namaz vakti ekranı~~
+3. PC companion servisi — temel sürüm hazır; şimdi çalan, mikser, otomatik
+   profil ve WhatsApp eklendi, panel tarafı geliştiriliyor
+4. Güvenlik sertleştirme: flash + NVS şifreleme, PIN kilidi
+5. Cilalama: WiFi kurulumu (provisioning), OTA, güç yönetimi, ayarlar ekranı
