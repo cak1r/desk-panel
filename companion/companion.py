@@ -6,11 +6,17 @@ so the ESP32 desk panel's Claude tile has something to show. Usage is the
 sum of two free sources: Claude Code CLI's own local session transcripts
 (claude_code_usage.py -- no API key or credit balance needed) plus
 whatever usage_store.py has recorded (manual record_usage() calls, or
-TrackedAnthropic if the Anthropic API is ever used directly). Runs from
-the system tray; right-click it to quit.
+TrackedAnthropic if the Anthropic API is ever used directly).
+
+Also publishes what is playing (media_publisher), per-app volumes
+(mixer_publisher), the foreground app's panel profile
+(foreground_publisher) and WhatsApp notifications (whatsapp_publisher),
+and executes the commands the panel sends back for those. Runs from the
+system tray; right-click it to quit.
 """
 
 import json
+import sys
 import threading
 import time
 
@@ -20,11 +26,18 @@ from pystray import Icon, Menu, MenuItem
 
 import audio_publisher
 import claude_code_usage
+import commands
 import config
+import foreground_publisher
 import pc_health_publisher
+import settings_check
 import usage_store
+from media_publisher import MediaPublisher
+from mixer_publisher import MixerPublisher
+from whatsapp_publisher import WhatsAppPublisher
 
 _stop_event = threading.Event()
+_command_topics: list[str] = []
 
 
 def make_icon_image() -> Image.Image:
@@ -39,6 +52,10 @@ def on_connect(client, userdata, connect_flags, reason_code, properties):
     if reason_code == 0:
         print("Connected to broker")
         client.publish(config.TOPIC_STATUS, "online", qos=1, retain=True)
+        # (Re)subscribe on every connect -- subscriptions don't survive a
+        # reconnect with a clean session.
+        for topic in _command_topics:
+            client.subscribe(topic, qos=1)
     else:
         print(f"Connect failed: {reason_code}")
 
@@ -70,21 +87,39 @@ def build_client() -> mqtt.Client:
 
 
 def main() -> None:
+    missing = settings_check.missing_settings(config)
+    if missing:
+        print("config.py is missing settings added in config.example.py -- copy these over:")
+        for name in missing:
+            print(f"  {name}")
+        sys.exit(1)
+
     client = build_client()
+
+    media = MediaPublisher(client, _stop_event)
+    mixer = MixerPublisher(client, _stop_event)
+    whatsapp = WhatsAppPublisher(client, _stop_event)
+    for topic, name, publisher in (
+        (config.TOPIC_MEDIA_CMD, "media", media),
+        (config.TOPIC_MIXER_CMD, "mixer", mixer),
+        (config.TOPIC_WHATSAPP_CMD, "whatsapp", whatsapp),
+    ):
+        client.message_callback_add(topic, commands.make_callback(name, publisher.handle_command))
+        _command_topics.append(topic)
+
     client.loop_start()
 
-    pub_thread = threading.Thread(target=publish_loop, args=(client,), daemon=True)
-    pub_thread.start()
-
-    audio_thread = threading.Thread(
-        target=audio_publisher.audio_publish_loop, args=(client, _stop_event), daemon=True
-    )
-    audio_thread.start()
-
-    health_thread = threading.Thread(
-        target=pc_health_publisher.health_publish_loop, args=(client, _stop_event), daemon=True
-    )
-    health_thread.start()
+    workers = [
+        (publish_loop, (client,)),
+        (audio_publisher.audio_publish_loop, (client, _stop_event)),
+        (pc_health_publisher.health_publish_loop, (client, _stop_event)),
+        (foreground_publisher.foreground_publish_loop, (client, _stop_event)),
+        (media.run, ()),
+        (mixer.run, ()),
+        (whatsapp.run, ()),
+    ]
+    for target, args in workers:
+        threading.Thread(target=target, args=args, daemon=True).start()
 
     def on_quit(icon: Icon, item: MenuItem) -> None:
         _stop_event.set()

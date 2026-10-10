@@ -1,0 +1,34 @@
+name: companion tests
+
+on:
+  push:
+    paths: ["companion/**", ".github/workflows/companion-tests.yml"]
+  pull_request:
+    paths: ["companion/**", ".github/workflows/companion-tests.yml"]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: companion
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: pip install -r requirements-dev.txt
+      # On Windows also install the real runtime deps, so a broken winrt /
+      # pycaw pin shows up here instead of on the desk PC.
+      - name: Install runtime dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          pip install -r requirements.txt
+          python -c "import winrt.windows.media.control, winrt.windows.ui.notifications.management, pycaw.pycaw"
+      - name: Run tests
+        run: python -m pytest -v
