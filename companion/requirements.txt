@@ -4,3 +4,4 @@ pillow>=10
 anthropic>=0.69
 pycaw>=20240210
 comtypes>=1.4
+psutil>=5.9

@@ -1,0 +1,14 @@
+#pragma once
+/*
+ * Copy to mqtt_config.h (gitignored) and fill in before building.
+ *
+ * Leave MQTT_BROKER_URI empty to disable MQTT entirely: screens that
+ * depend on it (Claude usage, later audio/media) will just keep showing
+ * their loading placeholders.
+ *
+ * Example: #define MQTT_BROKER_URI "mqtt://192.168.1.10:1883"
+ */
+
+#define MQTT_BROKER_URI  ""
+#define MQTT_USERNAME    "deskpanel"
+#define MQTT_PASSWORD    "CHANGE_ME"
