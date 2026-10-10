@@ -188,6 +188,9 @@ static const tr_key_map_t s_tr_key_map[] = {
     { ';', KEYBOARD_MODIFIER_LEFTSHIFT, HID_KEY_BACKSLASH },
     { '`', KEYBOARD_MODIFIER_RIGHTALT, HID_KEY_BACKSLASH },
     { '@', KEYBOARD_MODIFIER_RIGHTALT, HID_KEY_Q },            /* confirmed on hardware */
+    /* The ISO key left of Z (YouTube's speed shortcuts are '<' / '>'). */
+    { '<', 0, HID_KEY_EUROPE_2 },
+    { '>', KEYBOARD_MODIFIER_LEFTSHIFT, HID_KEY_EUROPE_2 },
 };
 
 static bool lookup_tr_key(uint32_t codepoint, uint8_t *modifier, uint8_t *keycode)

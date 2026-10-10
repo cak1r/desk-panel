@@ -1,7 +1,7 @@
 #include "screen_passwords.h"
 #include "secrets_config.h"
 #include "ui_theme.h"
-#include "usb_hid.h"
+#include "hid_actions.h"
 
 #include <string.h>
 
@@ -79,7 +79,7 @@ static void backspace_cb(lv_event_t *e)
 static void macro_btn_cb(lv_event_t *e)
 {
     const char *text = (const char *)lv_event_get_user_data(e);
-    usb_hid_send_text(text);
+    hid_actions_text(text);
 }
 
 static lv_obj_t *create_keypad_btn(lv_obj_t *parent, const char *label, const lv_font_t *font, lv_event_cb_t cb,

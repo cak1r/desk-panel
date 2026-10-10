@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 163 px
  * Bpp: 4
- * Opts: --font .\Manrope-Medium.ttf --size 163 --bpp 4 --format lvgl --symbols 0123456789: --lv-font-name manrope_medium_163_num -o C:\Users\ysfck\projects\desktop_display\LVGL-BASE\main\fonts\manrope_medium_163_num.c
+ * Opts: --font Manrope-Medium.ttf --size 163 --bpp 4 --format lvgl --symbols 0123456789: --lv-font-name manrope_medium_163_num -o main/fonts/manrope_medium_163_num.c
  ******************************************************************************/
 
 #include "lvgl.h"

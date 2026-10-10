@@ -6,6 +6,7 @@
 
 #include "waveshare_rgb_lcd_port.h"
 #include "usb_hid.h"
+#include "hid_actions.h"
 #include "wifi_time.h"
 #include "app_mqtt.h"
 #include "ui.h"
@@ -16,6 +17,7 @@ void app_main()
     wavesahre_rgb_lcd_bl_on();         // Turn on the screen backlight
 
     usb_hid_init();  // Bring up the USB HID (keyboard + consumer control) transport
+    hid_actions_init(); // Worker task that sends HID shortcuts/macros off the LVGL task
     wifi_time_init(); // Connect to WiFi and sync the clock over SNTP in the background
     app_mqtt_init();  // Connect to the MQTT broker (no-op until main/mqtt_config.h is filled in)
 

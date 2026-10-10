@@ -12,6 +12,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -24,7 +25,7 @@
 #define NVS_NAMESPACE "weather"
 #define NVS_KEY_CACHE "cache"
 
-#define HTTP_RESPONSE_MAX     2048
+#define HTTP_RESPONSE_MAX     8192
 #define WEATHER_REFRESH_S     (30 * 60)
 #define FETCH_RETRY_BACKOFF_S 60
 
@@ -37,6 +38,10 @@ typedef struct {
     int humidity_percent;
     int wind_kmh;
     int weather_code;
+    int day_count;
+    weather_day_t days[WEATHER_MAX_DAYS];
+    int hour_count;
+    weather_hour_t hours[WEATHER_MAX_HOURS];
 } weather_cache_t;
 
 static SemaphoreHandle_t s_mutex;
@@ -55,34 +60,34 @@ static bool system_time_is_valid(void)
 const char *weather_state_condition_text(int weather_code)
 {
     switch (weather_code) {
-        case 0: return "Acik";
-        case 1: return "Az Bulutlu";
-        case 2: return "Parcali Bulutlu";
-        case 3: return "Kapali";
+        case 0: return "Açık";
+        case 1: return "Az bulutlu";
+        case 2: return "Parçalı bulutlu";
+        case 3: return "Kapalı";
         case 45:
         case 48: return "Sisli";
         case 51:
         case 53:
-        case 55: return "Cisenti";
+        case 55: return "Çisenti";
         case 56:
-        case 57: return "Donan Cisenti";
+        case 57: return "Donan çisenti";
         case 61:
         case 63:
-        case 65: return "Yagmurlu";
+        case 65: return "Yağmurlu";
         case 66:
-        case 67: return "Donan Yagmur";
+        case 67: return "Donan yağmur";
         case 71:
         case 73:
-        case 75: return "Karli";
-        case 77: return "Kar Tanesi";
+        case 75: return "Karlı";
+        case 77: return "Kar taneleri";
         case 80:
         case 81:
-        case 82: return "Saganak Yagis";
+        case 82: return "Sağanak yağış";
         case 85:
-        case 86: return "Kar Saganagi";
-        case 95: return "Gok Gurultulu";
+        case 86: return "Kar sağanağı";
+        case 95: return "Gök gürültülü";
         case 96:
-        case 99: return "Dolu ile Firtina";
+        case 99: return "Dolulu fırtına";
         default: return "Bilinmiyor";
     }
 }
@@ -140,14 +145,85 @@ static int round_to_int(double v)
     return (int)(v >= 0.0 ? v + 0.5 : v - 0.5);
 }
 
+static int array_int(const cJSON *arr, int i, int fallback)
+{
+    const cJSON *item = cJSON_GetArrayItem(arr, i);
+    return cJSON_IsNumber(item) ? round_to_int(item->valuedouble) : fallback;
+}
+
+/* "2026-10-10" -> day of month + weekday (0 = Sunday). */
+static bool parse_date(const char *iso, int *mday, int *wday)
+{
+    struct tm tm = { 0 };
+    if (!iso || sscanf(iso, "%d-%d-%d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) != 3) {
+        return false;
+    }
+    tm.tm_year -= 1900;
+    tm.tm_mon -= 1;
+    tm.tm_hour = 12;
+    if (mktime(&tm) == (time_t)-1) {
+        return false;
+    }
+    *mday = tm.tm_mday;
+    *wday = tm.tm_wday;
+    return true;
+}
+
+static void parse_daily(const cJSON *daily, weather_cache_t *cache)
+{
+    const cJSON *dates = cJSON_GetObjectItemCaseSensitive(daily, "time");
+    const cJSON *codes = cJSON_GetObjectItemCaseSensitive(daily, "weather_code");
+    const cJSON *tmax = cJSON_GetObjectItemCaseSensitive(daily, "temperature_2m_max");
+    const cJSON *tmin = cJSON_GetObjectItemCaseSensitive(daily, "temperature_2m_min");
+    const cJSON *rain = cJSON_GetObjectItemCaseSensitive(daily, "precipitation_probability_max");
+
+    int n = cJSON_GetArraySize(dates);
+    for (int i = 0; i < n && cache->day_count < WEATHER_MAX_DAYS; i++) {
+        weather_day_t *d = &cache->days[cache->day_count];
+        const cJSON *date = cJSON_GetArrayItem(dates, i);
+        if (!cJSON_IsString(date) || !parse_date(date->valuestring, &d->mday, &d->wday)) {
+            continue;
+        }
+        d->weather_code = array_int(codes, i, -1);
+        d->max_c = array_int(tmax, i, 0);
+        d->min_c = array_int(tmin, i, 0);
+        d->rain_percent = array_int(rain, i, 0);
+        cache->day_count++;
+    }
+}
+
+/* Hourly arrays start at the current hour (forecast_hours); keep every
+ * HOUR_STEP-th entry so the strip spans the next ~12 hours. */
+#define HOUR_STEP 2
+
+static void parse_hourly(const cJSON *hourly, weather_cache_t *cache)
+{
+    const cJSON *times = cJSON_GetObjectItemCaseSensitive(hourly, "time");
+    const cJSON *rain = cJSON_GetObjectItemCaseSensitive(hourly, "precipitation_probability");
+
+    int n = cJSON_GetArraySize(times);
+    for (int i = 0; i < n && cache->hour_count < WEATHER_MAX_HOURS; i += HOUR_STEP) {
+        const cJSON *t = cJSON_GetArrayItem(times, i);
+        int y, mo, d, h, mi;
+        if (!cJSON_IsString(t) || sscanf(t->valuestring, "%d-%d-%dT%d:%d", &y, &mo, &d, &h, &mi) != 5) {
+            continue;
+        }
+        cache->hours[cache->hour_count].hour = h;
+        cache->hours[cache->hour_count].rain_percent = array_int(rain, i, 0);
+        cache->hour_count++;
+    }
+}
+
 static bool fetch_and_cache(void)
 {
-    char url[256];
+    char url[512];
     snprintf(url, sizeof(url),
              "https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s"
              "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m"
+             "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+             "&hourly=precipitation_probability&forecast_days=%d&forecast_hours=%d"
              "&timezone=auto",
-             WEATHER_LAT, WEATHER_LON);
+             WEATHER_LAT, WEATHER_LON, WEATHER_MAX_DAYS, WEATHER_MAX_HOURS * HOUR_STEP);
 
     char *response = malloc(HTTP_RESPONSE_MAX);
     if (!response) {
@@ -209,6 +285,8 @@ static bool fetch_and_cache(void)
         .wind_kmh = round_to_int(wind->valuedouble),
         .weather_code = code->valueint,
     };
+    parse_daily(cJSON_GetObjectItemCaseSensitive(root, "daily"), &cache);
+    parse_hourly(cJSON_GetObjectItemCaseSensitive(root, "hourly"), &cache);
     cJSON_Delete(root);
 
     xSemaphoreTake(s_mutex, portMAX_DELAY);
@@ -291,4 +369,8 @@ void weather_state_get_snapshot(weather_snapshot_t *out)
     out->humidity_percent = cache.humidity_percent;
     out->wind_kmh = cache.wind_kmh;
     out->weather_code = cache.weather_code;
+    out->day_count = cache.day_count;
+    memcpy(out->days, cache.days, sizeof(out->days));
+    out->hour_count = cache.hour_count;
+    memcpy(out->hours, cache.hours, sizeof(out->hours));
 }

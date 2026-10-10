@@ -24,6 +24,13 @@ void app_mqtt_init(void);
 void app_mqtt_subscribe(const char *topic, app_mqtt_msg_cb_t cb, void *user_ctx);
 
 /* True while the broker connection is currently up. */
+/*
+ * Publishes `payload` (payload_len bytes; 0 means strlen) with QoS 0, no
+ * retain. Returns false when not connected -- callers treat commands as
+ * best effort.
+ */
+bool app_mqtt_publish(const char *topic, const char *payload, int payload_len);
+
 bool app_mqtt_is_connected(void);
 
 #ifdef __cplusplus

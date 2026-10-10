@@ -32,7 +32,7 @@
 static const char *TAG = "prayer_times";
 
 static const char *const PRAYER_NAMES[PRAYER_COUNT] = {
-    "İmsak", "Güneş", "Oğle", "İkindi", "Akşam", "Yatsı",
+    "İmsak", "Güneş", "Öğle", "İkindi", "Akşam", "Yatsı",
 };
 
 /* Aladhan's "timings" JSON field for each of the above, in order. */
@@ -43,7 +43,28 @@ static const char *const ALADHAN_FIELDS[PRAYER_COUNT] = {
 typedef struct {
     int32_t date_stamp; /* YYYYMMDD, 0 = empty */
     prayer_time_t times[PRAYER_COUNT];
+    char hijri[PRAYER_HIJRI_LEN];
 } prayer_cache_t;
+
+static const char *const HIJRI_MONTHS[12] = {
+    "Muharrem", "Safer", "Rebiülevvel", "Rebiülahir", "Cemaziyelevvel", "Cemaziyelahir",
+    "Recep", "Şaban", "Ramazan", "Şevval", "Zilkade", "Zilhicce",
+};
+
+/* data.date.hijri -> "28 Rebiülahir 1448"; left empty if the shape is off. */
+static void parse_hijri(const cJSON *data, char *out, size_t out_len)
+{
+    const cJSON *hijri = cJSON_GetObjectItemCaseSensitive(cJSON_GetObjectItemCaseSensitive(data, "date"), "hijri");
+    const cJSON *day = cJSON_GetObjectItemCaseSensitive(hijri, "day");
+    const cJSON *year = cJSON_GetObjectItemCaseSensitive(hijri, "year");
+    const cJSON *month = cJSON_GetObjectItemCaseSensitive(cJSON_GetObjectItemCaseSensitive(hijri, "month"), "number");
+    out[0] = '\0';
+    if (!cJSON_IsString(day) || !cJSON_IsString(year) || !cJSON_IsNumber(month) ||
+        month->valueint < 1 || month->valueint > 12) {
+        return;
+    }
+    snprintf(out, out_len, "%d %s %s", atoi(day->valuestring), HIJRI_MONTHS[month->valueint - 1], year->valuestring);
+}
 
 static SemaphoreHandle_t s_mutex;
 static prayer_cache_t s_cache;
@@ -188,6 +209,7 @@ static bool fetch_and_cache(void)
     }
 
     prayer_cache_t cache = { 0 };
+    parse_hijri(data, cache.hijri, sizeof(cache.hijri));
     bool all_ok = true;
     for (int i = 0; i < PRAYER_COUNT; i++) {
         if (!parse_time_field(timings, ALADHAN_FIELDS[i], &cache.times[i], PRAYER_NAMES[i])) {
@@ -280,6 +302,7 @@ void prayer_times_get_snapshot(prayer_snapshot_t *out)
         return;
     }
     memcpy(out->times, cache.times, sizeof(out->times));
+    memcpy(out->hijri, cache.hijri, sizeof(out->hijri));
 
     time_t now = time(NULL);
     struct tm tm_now;

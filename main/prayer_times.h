@@ -7,7 +7,8 @@
 extern "C" {
 #endif
 
-#define PRAYER_COUNT 6
+#define PRAYER_COUNT     6
+#define PRAYER_HIJRI_LEN 40
 
 typedef struct {
     char name[16]; /* display name, e.g. "Imsak" */
@@ -20,6 +21,7 @@ typedef struct {
     prayer_time_t times[PRAYER_COUNT];
     int next_index;             /* index into times[] of the upcoming prayer, or -1 if past Yatsi */
     int32_t seconds_to_next;    /* countdown to times[next_index], or to tomorrow's Imsak estimate */
+    char hijri[PRAYER_HIJRI_LEN]; /* "28 Rebiülahir 1448", "" if unknown */
 } prayer_snapshot_t;
 
 /*
