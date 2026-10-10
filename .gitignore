@@ -5,3 +5,8 @@
 /main/mqtt_config.h
 /main/secrets_config.h
 /assets/node_modules
+# companion secrets & local env
+/companion/config.py
+/companion/anthropic_config.py
+/companion/.venv
+__pycache__/
