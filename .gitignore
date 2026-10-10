@@ -12,3 +12,4 @@
 __pycache__/
 /companion/probe_out
 /companion/.pytest_cache
+/test/host/build

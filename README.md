@@ -7,21 +7,28 @@ kablo hem güç verir hem de panelin klavye/medya tuşu olarak davranmasını sa
 
 ## Özellikler
 
-- **Bekleme ekranı:** büyük saat ve tarih; belirli bir süre dokunulmazsa
-  otomatik olarak geri döner.
-- **Tuş ızgarası:** ekranlara geçiş, klavye makroları, medya tuşları.
-- **Namaz vakitleri:** günün 6 vakti ve sıradaki vakte geri sayım (Aladhan API,
-  Diyanet hesaplama yöntemi, NVS'te önbelleklenir).
-- **Hava durumu:** Open-Meteo'dan anlık hava.
-- **Medya:** ses seviyesi, oynat/duraklat/ileri/geri.
-- **PC sağlığı:** CPU / RAM / GPU kullanımı.
-- **Claude kullanımı:** günlük istek ve token sayısı.
-- **Şifre/makro ekranı:** PIN ile kilitli, metni USB klavye olarak yazar.
-
-Yapım aşamasında (companion tarafı hazır, panel ekranları geliştiriliyor):
-şimdi çalan şarkı + kapak, uygulama başına ses mikseri, öndeki uygulamaya göre
-otomatik sayfa (YouTube / YouTube Music / WhatsApp), WhatsApp bildirimleri ve
-sabit sohbetler, 10 günlük hava durumu, günün hadisi.
+- **Bekleme ekranı:** büyük saat, tarih, hava; altında çalan şarkı, sıradaki
+  namaz vaktine kalan süre ve WhatsApp bildirimleri için bakış kartları.
+  5 dakika dokunulmazsa geri iner.
+- **Deck:** Stream Deck benzeri 5×3 tuş ızgarası. Kısayol tuşları (Discord
+  sağırlaştır, ekran görüntüsü, VS Code, Terminal, PC kilitle) USB HID ile gider;
+  canlı tuşlar veri gösterir (çalan şarkı ve kapağı, WhatsApp rozeti, mikrofon
+  durumu, Claude token'ı, namaz geri sayımı, hava, ses, CPU).
+- **Şimdi çalan:** kapak, ilerleme (dokunarak sarma), ±10 sn, önceki/sonraki ve
+  çalan uygulamanın kendi ses seviyesi.
+- **Mikser:** her uygulama, hoparlör ve mikrofon için dikey ses sürgüsü ve
+  sessize alma.
+- **Otomatik profil:** PC'de YouTube, YouTube Music ya da WhatsApp öne gelince
+  panel ilgili sayfaya geçer; uygulama arka plana düşünce Deck'e döner.
+- **YouTube:** videonun bilgisi ve YouTube'un oynatıcı kısayolları (J/K/L, tam
+  ekran, altyazı, hız, sonraki video…).
+- **WhatsApp:** PC'deki son bildirimler ve tek dokunuşla açılan sabit sohbetler.
+- **Namaz vakitleri:** 6 vakit, saniyeli geri sayım, hicri tarih (Aladhan API,
+  Diyanet yöntemi, NVS önbelleği). Günün hadisi kartı companion yayın yaptığında
+  görünür.
+- **Hava durumu:** anlık hava, saatlik yağış ihtimali ve 10 günlük tahmin
+  (Open-Meteo).
+- **PC sağlığı, Claude kullanımı** ve PIN kilitli **şifre/makro** ekranı.
 
 ## Donanım
 
@@ -74,6 +81,33 @@ Gereken: [ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3
    ```
 
    İlk derlemede bileşenler (LVGL vb.) `managed_components/` altına indirilir.
+   `dependencies.lock` yerel bileşenlerin mutlak yolunu içerdiği için her
+   makinede derleme sırasında değişir; bu değişikliği commit'lemeyin.
+
+### Fontlar ve ikonlar
+
+`main/fonts/` altındaki LVGL fontları ve `main/ui_icons.h` elle düzenlenmez,
+`assets/gen_fonts.py` ile üretilir (Node.js gerekir, `lv_font_conv`'u `npx` ile
+çalıştırır). Yeni bir Tabler ikonu eklemek için adını script'teki `ICONS`
+listesine ekleyip çalıştırın:
+
+```bash
+python3 assets/gen_fonts.py
+```
+
+### Testler
+
+Donanımdan bağımsız firmware kodu (biçimlendirme, MQTT JSON yardımcıları)
+bilgisayarda test edilir:
+
+```bash
+. $IDF_PATH/export.sh     # cJSON için
+make -C test/host
+```
+
+GitHub Actions'ta `firmware` iş akışı her değişiklikte firmware'i ESP-IDF
+v5.4.4 ile derler ve bu testleri çalıştırır; `companion tests` iş akışı
+companion testlerini çalıştırır.
 
 Bölümleme tablosu (`partitions.csv`) 8 MB flash için iki OTA bölümü içerir;
 diğer seçenekler `partitions_notes.txt` dosyasında.
@@ -91,15 +125,19 @@ testler ve bilinen kısıtlar için: **[companion/README.md](companion/README.md
 ```
 main/                  firmware kaynakları
   main.c               başlatma sırası
-  ui.c, ui_theme.c     tileview, ekran geçişleri, tema
+  ui.c                 gezinme: saat perdesi, Deck, sayfalar, otomatik profil
+  ui_theme.c           renkler, fontlar, ortak stil yardımcıları
+  ui_art.c             tüm ekranların paylaştığı albüm kapağı
   screen_*.c           her ekran
   *_state.c            MQTT/HTTP'den gelen veri modelleri
-  app_mqtt.c           MQTT istemcisi ve abonelik yönlendirme
-  usb_hid.c            TinyUSB klavye + consumer control
+  app_mqtt.c           MQTT istemcisi, parçalı mesaj birleştirme, komut gönderme
+  usb_hid.c            TinyUSB klavye + consumer control (Türkçe Q eşlemesi)
+  hid_actions.c        HID kısayollarını arayüzü bloklamadan gönderen kuyruk
   prayer_times.c       Aladhan istemcisi + NVS önbellek
-  fonts/, images/      LVGL'e dönüştürülmüş fontlar ve görseller
+  fonts/               assets/gen_fonts.py ile üretilen LVGL fontları
 components/            yerel olarak tutulan bileşenler (LVGL, GT911)
-assets/                kaynak fontlar, ikonlar, gradyan üretici
+assets/                kaynak fontlar, Tabler ikon fontu, font üretici
+test/host/             firmware için bilgisayarda çalışan birim testleri
 companion/             PC tarafı servis (Python) — kendi README'si var
 ```
 
@@ -107,7 +145,7 @@ companion/             PC tarafı servis (Python) — kendi README'si var
 
 1. ~~LVGL + tileview iskeleti ve USB HID~~
 2. ~~Namaz vakti ekranı~~
-3. PC companion servisi — temel sürüm hazır; şimdi çalan, mikser, otomatik
-   profil ve WhatsApp eklendi, panel tarafı geliştiriliyor
+3. ~~PC companion servisi~~ — şimdi çalan, mikser, otomatik profil ve WhatsApp
+   hem companion'da hem panelde hazır; günün hadisi için kaynak bekleniyor
 4. Güvenlik sertleştirme: flash + NVS şifreleme, PIN kilidi
 5. Cilalama: WiFi kurulumu (provisioning), OTA, güç yönetimi, ayarlar ekranı

@@ -124,6 +124,7 @@ durumu hemen alır. JSON'lar UTF-8'dir.
 | `deskpanel/profile` | `{"profile": "ytmusic", "app": "brave.exe"}` — `profile` eşleşme yoksa `null` |
 | `deskpanel/whatsapp/feed` | aşağıda |
 | `deskpanel/whatsapp/contacts` | `[{"id": "anne", "name": "Annem"}]` — telefon numarası gönderilmez |
+| `deskpanel/hadith/today` | `{"text": "...", "source": "Buhârî, 1", "grade": "Sahih"}` — **planlanan:** panel bu konuyu dinliyor, companion henüz yayınlamıyor |
 
 **`deskpanel/media/nowplaying`**
 
@@ -150,9 +151,9 @@ en az `MEDIA_RESYNC_S` saniyede bir yeniden yayınlar; panel `status ==
 **`deskpanel/media/art`** — `w × h × 2` bayt, little-endian RGB565 (LVGL'in
 `LV_COLOR_16_SWAP` kapalıyken beklediği `LV_IMG_CF_TRUE_COLOR` düzeni).
 Kaynak kare değilse ortadan kırpılır. `nowplaying` içindeki `art.id`
-değiştiğinde panel yeni pikselleri kullanmalıdır. 168 px için 56 KB'tır;
-panelin MQTT tamponu ya parçalı mesajları birleştirmeli ya da bu boyuttan büyük
-olmalıdır.
+değiştiğinde panel yeni pikselleri kullanır. 168 px için 56 KB'tır; panel
+(`main/app_mqtt.c`) MQTT'nin parçalı gönderdiği mesajları 128 KB'a kadar
+birleştirir.
 
 **`deskpanel/mixer/state`**
 
