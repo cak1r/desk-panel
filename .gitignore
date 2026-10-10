@@ -10,3 +10,5 @@
 /companion/anthropic_config.py
 /companion/.venv
 __pycache__/
+/companion/probe_out
+/companion/.pytest_cache
